@@ -1,6 +1,6 @@
-Demo that illustrates the capabilities of Omnigres extensions (omni_json and omni_python) for JSON customization and Python integration in a bookstore database.
+# Omnigres Bookstore Integration Showcase
 
-### Step 1: Create a Bookstore Database
+## Step 1: Create a Bookstore Database
 
 ```sql
 -- Create a Books table
@@ -19,28 +19,7 @@ INSERT INTO books (title, author, price, published_date) VALUES
     ('1984', 'George Orwell', 12.75, '1949-06-08');
 ```
 
-### Step 2: Configure omni_json for the Books Table
-
-```sql
--- Configure omni_json for the Books table
-SELECT omni_json.define_table_mapping('books', '
-{
-  "columns": {
-    "book_id": { "exclude": true },
-    "title": { "path": "book_title" },
-    "price": {
-      "transform": {
-        "input": { "type": "numeric", "function": "calculate_discounted_price" },
-        "output": { "type": "numeric", "function": "mask_price" }
-      }
-    },
-    "published_date": { "exclude": true }
-  }
-}
-');
-```
-
-### Step 3: Create Python Functions for Price Manipulation
+## Step 3: Create Python Functions for Price Manipulation
 
 Create a Python file, e.g., `price_functions.py`, with the following content:
 
@@ -61,46 +40,106 @@ def mask_price(price: float) -> float:
     return masked_price
 ```
 
-### Step 4: Load Python Functions into the Database
+## Step 4: Configure Virtual File System (vfs)
 
 ```sql
--- Load the Python functions into the database
-CREATE OR REPLACE FUNCTION load_python_functions()
-RETURNS omni_python.inline LANGUAGE SQL AS $$
-from omni_python import load_module
-
-load_module('price_functions')
+-- Configure the virtual file system for Python files
+CREATE OR REPLACE FUNCTION demo_function()
+RETURNS omni_vfs.local_fs LANGUAGE SQL AS $$
+SELECT omni_vfs.local_fs('/demo')
 $$;
-
-SELECT omni_schema.load_from_inline(load_python_functions());
 ```
 
-### Step 5: Retrieve and Customize JSON Data
+```sql
+-- Configure omni_python to use local Python packages
+INSERT INTO omni_python.config (name, value) VALUES ('pip_find_links', '/python-wheels');
+
+-- Load Python Functions into the Database
+SELECT omni_schema.load_from_fs(demo_function());
+```
+
+**Explanation:**
+- The virtual file system (vfs) is configured to include Python files from the `/demo` directory.
+- The `omni_python` extension is set to find Python packages in the `/python-wheels` directory.
+- Python functions are loaded into the database from the configured file system.
+
+## Step 5: Run Docker Container with Omnigres
+
+**DOCKER RUN:**
+```bash
+docker run --name omnigres \
+           -e POSTGRES_PASSWORD=omnigres \
+           -e POSTGRES_USER=omnigres \
+           -e POSTGRES_DB=omnigres \
+           --mount source=omnigres,target=/var/lib/postgresql/data \
+           -v $(pwd)/demo:/python-files \
+           -p 127.0.0.1:5433:5432 --rm ghcr.io/omnigres/omnigres-slim:latest
+```
+
+## Configure omni_json for the Books Table
+
+```sql
+-- Configure omni_json for the Books table
+SELECT omni_json.define_table_mapping(
+    books,
+    $${
+        "columns": {
+            "book_id": { "exclude": true },
+            "title": { "path": "book_title" },
+            "price": {
+                "transform": {
+                    "input": { "type": "numeric", "function": "calculate_discounted_price" },
+                    "output": { "type": "numeric", "function": "mask_price" }
+                }
+            },
+            "published_date": { "exclude": true }
+        }
+    }$$
+);
+```
+
+## Step 5: Retrieve and Customize JSON Data
 
 ```sql
 -- Retrieve JSON data with customization
-SELECT omni_json.retrieve('books', 'book_id = 1') AS customized_json;
+SELECT to_jsonb(books.*) FROM books
 ```
 
-### Step 6: Insert and Update JSON Data
+## Step 6: Insert and Update JSON Data
 
 ```sql
--- Insert JSON data
-INSERT INTO books (title, author, price, published_date)
-VALUES ('New Book', 'New Author', 15.99, '2022-01-01');
+-- Updating from JSON
 
--- Update JSON data
+-- Assume some_id is the book_id you want to update
 UPDATE books
-SET price = calculate_discounted_price(price)
-WHERE book_id = 4;
+SET
+    -- Explicitly listed fields to be updated
+    (published_date) =
+        (SELECT
+            '1981-12-12'::DATE AS published_date)
+WHERE book_id = some_id;
+
+-- Inserting from JSON
+
+-- Assume the data for the new book is provided as a JSON object
+WITH new_book_data AS (
+    SELECT
+        '{"title": "New Book", "author": "New Author", "price": 15.99, "published_date": "2022-01-01"}'::JSONB AS json_data
+)
+INSERT INTO books (title, author, price, published_date)
+SELECT
+    json_data->>'title' AS title,
+    json_data->>'author' AS author,
+    calculate_discounted_price((json_data->>'price')::NUMERIC) AS price,
+    (json_data->>'published_date')::DATE AS published_date
+FROM new_book_data;
 ```
 
-### Step 7: Query Python Functions in SQL
-
+## Step 7: Query Python Functions in SQL
 ```sql
 -- Query using Python functions
 SELECT title, mask_price(price) AS masked_price
 FROM books;
 ```
 
-This demo showcases the configuration of `omni_json` for JSON customization, the development and integration of Python functions for price manipulation, the retrieval and manipulation of JSON data, and the execution of Python functions within SQL queries.
+This comprehensive demo showcases the powerful capabilities of Omnigres extensions, including `omni_json` for JSON customization and `omni_python` for seamless Python integration within a bookstore database. The integration enhances JSON retrieval, manipulation, and SQL queries with Python functions, providing a robust solution for flexible and efficient data management.
