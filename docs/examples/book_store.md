@@ -1,4 +1,13 @@
 # Omnigres Bookstore Integration Showcase
+**Objective:**
+The demo illustrates the capabilities of Omnigres extensions (omni_json and omni_python) for JSON customization and Python integration in a bookstore database. 
+
+_Key Steps:_
+- **`omni_json` Configuration**: Customize JSON output for the books table.
+- **Python Functions**: Develop Python functions for price manipulation.
+- **JSON Data Retrieval**: Retrieve and customize JSON data.
+- **Data Manipulation**: Insert and update JSON data.
+- **Query Python Functions**: Execute Python functions in SQL queries.
 
 ## Step 1: Create a Bookstore Database
 
